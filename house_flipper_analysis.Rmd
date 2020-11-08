@@ -1,0 +1,362 @@
+---
+title: "How to Use Data Visualization and Hypothesis Testing in R to Plan a House Flipping Project"
+author: "Ess Jaraha"
+date: "August 3, 2020"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.align = "center")
+```
+
+<div style="margin-bottom:30px;"></div>
+
+#### *With the right planning, your house flip will never be a flop!*
+
+This is the story of how The Friendly Flippers, an imaginary house flipping company, used data visualization and hypothesis testing to prepare for their latest project in Ames, Iowa. 
+
+Before starting their project, The Friendly Flippers used Ames housing data to find:
+
+1. Which neighborhoods have...
+    - more than twenty houses
+    - a mean sale price that is greater than the mean sale price in Ames
+    - a high variance in sale price
+
+2. Which months have a statistically higher demand for houses (in the neighborhoods that also meet the first criteria)?
+
+A high mean sale price will attract big spenders once the project is complete, but if all of the houses in the neighborhood are expensive The Friendly Flippers will not be able to turn a profit. The Friendly Flippers can maximize their profit by investing in a neighborhood that also has a high variance in sale price. A high varince in sale price will ensure that the sale prices are distributed along a wide range, so The Friendly Flippers can find a budget-friendly house in an expensive neighborhood. Once the project is complete, they'll be able to sell the house for top dollar!
+
+In some months, demand for houses is higher than others. If demand for houses is high, buyers bid higher, and houses sell for more. The Friendly Flippers use hypothesis testing to identify the months that have statistically higher demand for houses. If their project concludes in a month with high demand, they'll be able to sell the house at a higher price.
+
+It may seem like a lot to consider, but three simple plots can give The Friendly Flippers all of the insights they need to approach their next project with confidence.
+
+### __*Let's get started!*__
+
+<div style="margin-bottom:30px;"></div>
+
+```{r packages, message=FALSE, warning=FALSE, paged.print=FALSE, echo = TRUE}
+library(AmesHousing)
+library(tidyverse)
+```
+
+The Ames housing dataset can be found in the AmesHousing package. Each observation in the dataset represents one house. Eighty-one variables describe each house in the dataset. The Friendly Flippers only need three of those variables to complete their analysis: <span style="background-color: rgb(240, 240, 240)">Neighborhood</span>, <span style="background-color: rgb(240, 240, 240)">Sale_Price</span>, and <span style="background-color: rgb(240, 240, 240)">Mo_Sold</span>. Let's take a quick look at the data.
+
+```{r, message=FALSE, warning=FALSE, paged.print=FALSE, echo = TRUE}
+ames <- make_ames()
+glimpse(select(ames, Neighborhood, Sale_Price, Mo_Sold))
+```
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+
+######################################################################################
+# DATA
+
+# remove underscore from neighborhood factor levels
+levels(ames$Neighborhood) <- gsub('_', ' ',levels(ames$Neighborhood)) 
+
+######################################################################################
+# VARIABLES
+
+ames_mean_sale_price <- mean(ames$Sale_Price)
+high_var <- 2500000000
+
+# THEME to be used on all plots
+style <-   theme(plot.title = element_text(face = "bold", size = 20),
+                 axis.title = element_text(size = 16),
+                 axis.text = element_text(size = 12),
+                 legend.text = element_text(size = 16),
+                 legend.title = element_text(face = "bold", size = 16))
+
+######################################################################################
+```
+
+The Ames housing dataset has been saved to a dataframe called <span style="background-color: rgb(240, 240, 240)">ames</span>. A preview of <span style="background-color: rgb(240, 240, 240)">ames</span> shows that the first observation is located in North Ames and sold for \$215,000 in the month of May. We can also see from the preview that there are 2,930 houses in Ames. 
+
+```{r, message=FALSE, warning=FALSE, paged.print=FALSE, fig.width=8, fig.asp=0.618}
+ames %>%
+  ggplot(aes(Sale_Price)) +
+  geom_histogram(binwidth = 50000) + # histogram
+  scale_x_continuous(labels = scales::dollar, breaks = c(0,200000,400000,600000)) + # x axis tick marks
+  geom_vline(xintercept = ames_mean_sale_price, lty = 'dashed') + # vline at mean
+  geom_label(x = ames_mean_sale_price
+             , y = 1050
+             , label = sprintf('mean sale price = $%s\nnumber of houses = %s'
+                               , formatC(ames_mean_sale_price, format = 'd', big.mark = ',')
+                               , formatC(nrow(ames), format = 'd', big.mark = ','))
+             , hjust = -0.03) +
+  labs(title = 'Sale Prices for Houses in Ames, Iowa' # title and axis labels
+       , x = 'Sale Price'
+       , y = 'Number of Houses') +
+  style
+```
+
+The histogram reveals that most of the houses in Ames cost less than the mean sale price ($180,769). There are also a few houses that cost more than double the mean sale price in Ames. 
+
+Now that The Friendly Flippers are familiar with the data, they can start to narrow their search based on the criteria listed above.
+
+<div style="margin-bottom:30px;"></div>
+
+### __*Which neighborhoods have more than twenty houses and a mean sale price that is above the mean sale price in Ames?*__
+
+<div style="margin-bottom:30px;"></div>
+
+To calculate neighborhood characteristics, <span style="background-color: rgb(240, 240, 240)">ames</span> must be grouped by <span style="background-color: rgb(240, 240, 240)">Neighborhood</span>. Once grouped, the mean sale price and number of houses can be calculated for each neighborhood.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = TRUE}
+ames_by_nbrhd <- ames %>%
+  group_by(Neighborhood) %>%
+  summarize(mean_sale_price = mean(Sale_Price),
+         n_houses = n())
+
+glimpse(select(ames_by_nbrhd, Neighborhood, mean_sale_price, n_houses))
+```
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = FALSE}
+ames_by_nbrhd <- ames %>%
+  group_by(Neighborhood) %>%
+  mutate(mean_sale_price = mean(Sale_Price),
+         n_houses = n())
+```
+
+Great! <span style="background-color: rgb(240, 240, 240)">ames</span> has been grouped by <span style="background-color: rgb(240, 240, 240)">Neighborhood</span>, the number of houses per neighborhood has been calculated in a new variable called <span style="background-color: rgb(240, 240, 240)">n_houses</span>, and the mean sale price per neighborhood has been calculated in another variable called <span style="background-color: rgb(240, 240, 240)">mean_sale_price</span>. A new dataframe called <span style="background-color: rgb(240, 240, 240)">ames_by_nbrhd</span> contains all of the results. 
+
+Each row in <span style="background-color: rgb(240, 240, 240)">ames_by_nbrhd</span> represents one neighborhood. We can see from the code output that there are twenty-eight neighborhoods in Ames. The first neighborhood, North Ames, has 443 houses and a mean sale price of $145,097. Which of the neighborhoods have more than twenty houses and a mean sale price that is higher than \$180,769? The Friendly Flippers use a scatter plot to quickly answer this question.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, fig.width=11, fig.asp=0.618}
+
+ggplot(ames_by_nbrhd, aes(x = n_houses, y = mean_sale_price)) +
+  geom_point(alpha = 0) +
+  geom_text(x = ames_by_nbrhd$n_houses, # neighborhood names
+            y = ames_by_nbrhd$mean_sale_price,
+            label = ames_by_nbrhd$Neighborhood,
+            check_overlap = TRUE) +
+  scale_y_continuous(labels = scales::dollar) + # dollars on x axis
+  annotate("rect", # green rectangle
+           xmax = 450, 
+           ymax = 350000, 
+           xmin = 20, 
+           ymin = ames_mean_sale_price,
+           fill = "palegreen3", 
+           alpha = 0.5) +
+  geom_label(x = 275, # green label
+             y = 320000,
+             label = 'Neighborhoods that have\nmore than twenty houses and\na mean sale price that is higher than\nthe mean sale price in Ames.',
+             hjust = 0,
+             fill = "honeydew2", 
+             size = 5) +
+  labs(title = 'Neighborhoods in Ames, Iowa', # axis labels
+       x = 'Number of Houses', 
+       y = 'Mean Sale Price') +  
+  style # theme - saved to variable called style
+```
+
+It is clear from looking at the plot above that The Friendly Flippers must eliminate some neighborhoods from their analysis. The Neighborhoods that are *not* highlighted in green should be eliminated because they have less than twenty houses or a mean sale price that is less than the mean sale price in Ames. Let's make a vector containing the names of all of the neighborhoods that fall *within* the green area. 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = TRUE}
+keep <- ames_by_nbrhd$Neighborhood[which(ames_by_nbrhd$n_houses > 20 & 
+                                           ames_by_nbrhd$mean_sale_price > ames_mean_sale_price)]
+```
+
+In the next step of the analysis, The Friendly Flippers will use <span style="background-color: rgb(240, 240, 240)">keep</span> to index <span style="background-color: rgb(240, 240, 240)">ames_by_nbrhd</span>. Then, they'll visualize the variance in sale price for each neighborhood.
+
+<div style="margin-bottom:30px;"></div>
+
+### __*Which neighborhoods have a high variance in sale price?*__
+
+<div style="margin-bottom:30px;"></div>
+
+To find which neighborhoods have a high variance in sale price, The Friendly Flippers add a new variable to <span style="background-color: rgb(240, 240, 240)">ames_by_nbrhd</span> which contains the variance in sale price for each neighborhood. They also apply a filter to <span style="background-color: rgb(240, 240, 240)">ames_by_nbrhd</span> to exclude data for any neighborhood which is not in <span style="background-color: rgb(240, 240, 240)">keep</span>.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = TRUE}
+ames_by_nbrhd <- ames_by_nbrhd %>% 
+  filter(Neighborhood %in% keep) %>%
+  mutate(variance_sale_price = var(Sale_Price))
+```
+
+Now that the variance for each neighborhood has been saved to a new variable called <span style="background-color: rgb(240, 240, 240)">variance_sale_price</span>, The Friendly Flippers can use a series of density plots to visualize the results.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+
+# define color palette for conditional formatting
+pal <- c('high' = "palegreen3",
+         'low' = "gray")
+
+ames_by_nbrhd <- ames_by_nbrhd %>% 
+  mutate(variance = if_else(variance_sale_price > high_var, 'high', 'low'))
+
+# plot
+ames %>% 
+  filter(Neighborhood %in% keep) %>%
+  group_by(Neighborhood) %>%
+  mutate(variance_sale_price = var(Sale_Price),
+         variance = if_else(variance_sale_price > high_var, 'high', 'low')) %>%
+  ggplot(aes(x = Sale_Price, 
+             y = reorder(Neighborhood, variance_sale_price),
+             fill = variance)) +
+  ggridges::geom_density_ridges() +
+  scale_fill_manual(
+    values = pal,
+    limits = names(pal)) +
+  scale_x_continuous(labels = scales::dollar) +
+  labs(title = 'Variance in Sale Price',
+       x = 'Sale Price', y = 'Neighborhood') +
+  style
+```
+
+The plot above shows the variance in sale price for each neighborhood in order of increasing variance, with the lowest variance at the bottom. The heights of the curves correspond to the number of houses at each sale price. For example, the curve for Bloomington Heights is highest at \$200,000 because most of the houses in Bloomington Heights cost $200,000. 
+
+In neighborhoods with low variances in sale price, like Bloomington Heights, prices are concentrated around a central value and exist within a narrow range. This creates a sharp peak. In neighborhoods with high variances, sale prices are distributed along a wide range, creating a flattened curve. 
+
+Neighborhoods with high variances have been marked in green. These are the neighborhoods where The Friendly Flippers have the best chances of finding a budget-friendly house in a more expensive neighborhood. Let's update <span style="background-color: rgb(240, 240, 240)">keep</span> by removing the neighborhoods without high variances.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = TRUE}
+keep <- ames_by_nbrhd$Neighborhood[which(ames_by_nbrhd$variance_sale_price > 2500000000 &
+                                           ames_by_nbrhd$n_houses > 20 & 
+                                           ames_by_nbrhd$mean_sale_price > ames_mean_sale_price)]
+```
+
+Nice! The Friendly Flippers have narrowed their search from 2,930 houses to 980 houses. Now they can use hypothesis testing to determine which months have statistically higher demands for houses in those neighborhoods.
+
+<div style="margin-bottom:30px;"></div>
+
+### __*Which months have statistically higher demands for houses (in the neighbohoods that meet The Friendly Flippers' criteria)?*__
+
+<div style="margin-bottom:30px;"></div>
+
+
+The Friendly Flippers want to plan their project such that it concludes near a month with a statistically higher demand for houses. "Statistically higher demand" means that it would be very unlikely for a certain month to have had such high demand by chance alone. There must have been some outside factor that caused the demand to be so high. 
+
+Hypothesis testing identifies unlikely events by comparing them against a known distribution of random events. Simply put, if an event does not fall within a distribution of random events, then the event must not have been random! 
+
+To conduct a hypothesis test, three things must be defined: 
+
+1. The distribution
+2. The hypotheses
+3. The level of significance
+
+<div style="margin-bottom:30px;"></div>
+
+#### The Distribution
+
+<div style="margin-bottom:30px;"></div>
+
+Over the centuries, many distributions for random events have been defined and refined to fit different types of data. The normal distribution, binomial distribution, and Poisson distribution are just a few examples. For their hypothesis test, The Friendly Flippers will be using a binomial distribution because their dataset meets the four criteria for a binomial distribution:
+
+1. __There are two possible outcomes.__ The demand either is statistically high, or it is not.
+2. __The number of observations is fixed.__ The number of houses in the dataset will not change.
+3. __Each observation is independent.__ A house sold in one month has no effect on a house sold in another month.
+4. __The probability of success is exactly the same from one observation to the next.__ The probability of a house being sold in any month is one in twelve.
+
+<div style="margin-bottom:30px;"></div>
+
+#### The Hypotheses
+
+<div style="margin-bottom:30px;"></div>
+
+Every hypothesis test has two hypotheses: the null hypothesis and the alternative hypothesis. The null hypothesis defines the commonly accepted outcome. The alternative hypothesis defines an outcome which is less likely. Usually, the aim of a hypothesis test is to disprove the null hypothesis and accept the alternative hypothesis. 
+
+In The Friendly Flippers' case, it is commonly accepted that a month does not have a statistically higher demand for houses. They will conduct twelve hypothesis tests, one for each month ($month_x$), in hopes of disproving the null hypothesis and finding months in which the demand for houses is statistically higher. The Friendly Flippers have stated their hypotheses below:
+
+**Null Hypothesis:** $month_x$ *does not have a statistically higher demand for houses*
+
+**Alternative Hypothesis:** $month_x$ *does have a statistically higher demand for houses*
+
+
+<div style="margin-bottom:30px;"></div>
+
+#### The Level of Significance
+
+<div style="margin-bottom:30px;"></div>
+
+
+The level of significance is the cumulative probability (p-value) at which the null hypothesis can be accepted or rejected. A widely accepted level of significance is 0.05, or five percent, so 0.05 is the level of significance that The Friendly Flippers have chosen for their hypothesis test. If the p-value of an event *exceeds* 0.05, then the *null hypothesis* is accepted. If the p-value of an event is *less than* 0.05, then the *alternative hypothesis* is accepted. Let's look at an example. We'll calculate the p-value for selling at least 80 out of a sample of 1000 houses in one month. 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = TRUE}
+pbinom(80, 1000, 1/12, lower.tail = FALSE)
+```
+
+The p-value for selling at least 80 houses out of a sample of 1000 houses in one month (where the probability of selling a house in any month is 1/12)  is 0.6216607. The arguement "lower.tail = FALSE" allows us to calculate the p-value for selling *at least* 80 houses (rather than exactly eighty houses). Since the p-value exceeds the level of significance, this event does not have statistically higher demand for houses. The null hypothesis is accepted.
+
+Let's calculate the number of houses sold each month in the selected neighborhoods as well as the corresponding p-value. We'll group <span style="background-color: rgb(240, 240, 240)">ames</span> by <span style="background-color: rgb(240, 240, 240)">Mo_Sold</span> then create two new variables to show the number of houses sold and the p-value for each month: <span style="background-color: rgb(240, 240, 240)">n_houses</span> and <span style="background-color: rgb(240, 240, 240)">p_val</span>. The results are saved to a new dataframe called <span style="background-color: rgb(240, 240, 240)">ames_by_month</span>.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = FALSE}
+n_sample <- nrow(ames[which(ames$Neighborhood %in% keep),]) # calculate sample size (number of houses in the selected neighborhoods)
+```
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = TRUE}
+ames_by_month <- ames %>%
+  filter(Neighborhood %in% keep) %>%
+  group_by(Mo_Sold) %>%
+  summarise(n_houses = n()) %>%
+  mutate(p_val = pbinom(n_houses, n_sample, 1/12, lower.tail = FALSE),
+         Mo_Sold = factor(month.abb[Mo_Sold], levels = month.abb))
+
+glimpse(select(ames_by_month, Mo_Sold, n_houses, p_val))
+```
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+ames_by_month <- ames_by_month %>%
+  mutate(significance = case_when(p_val <= 0.05 ~ '1',
+                                  p_val > 0.05 ~ '0'))
+```
+
+Each row in <span style="background-color: rgb(240, 240, 240)">ames_by_month</span> represents one month. In January, 52 houses were sold. The p-value for selling at least 52 houses out of a sample of 980 houses is 0.99. So, January does not have a statistically higher demand for houses. 
+
+The Friendly Flippers use a bar plot to quickly visualize the results for all months. Let's see what they found!
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+pal <- c('1' = "palegreen3",
+         '0' = "gray")
+
+ames_by_month %>%
+  ggplot(aes(x = Mo_Sold, 
+             y = n_houses, 
+             fill = significance)) +
+  geom_col() +
+  geom_label(x = ames_by_month$Mo_Sold,
+             y = ames_by_month$n_houses,
+             label = ames_by_month$n_houses,
+             show.legend = FALSE) +
+  scale_fill_manual(
+    values = pal,
+    limits = names(pal),
+    name = "p-value",
+    labels = c("less than 0.05", "more than 0.05")) +
+  labs(title = "Houses Sold Per Month",
+       x = "Month", 
+       y = "Number of Houses Sold") +
+  style
+```
+
+Wow! It's clear that The Friendly Flippers should plan their project such that it concludes right before the months of May, June, or July. These months have statistically higher demands for houses because their p-values are greater than 0.05. The demand for houses during May, June, and July could not have been so high without an external influence. In this case, the external influence is the time of year. Demand for houses tends to follow a seasonal trend. Demand is highest during the summer and lowest during winter. The results of the hypothesis test support this trend.
+
+<div style="margin-bottom:30px;"></div>
+
+### __*Findings*__
+
+<div style="margin-bottom:30px;"></div>
+
+The Friendly Flippers are as prepared as can be to find an ideal house to flip! They'll start their search in the neighborhoods that have more than twenty houses, mean sale prices that are above the mean sale price in Ames, and high variances in sale prices. The nine neighborhoods that meet this criteria are shown in the table below.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+ames_by_nbrhd <- ames %>%
+    filter(Neighborhood %in% keep) %>%
+    group_by(Neighborhood) %>%
+    summarise(mean_sale_price = mean(Sale_Price),
+              n_houses = n(),
+              variance_sale_price = var(Sale_Price)) %>%
+    mutate(msp = paste("$", formatC(mean_sale_price, format = 'd', big.mark = ',')),
+           vsp = rank(desc(variance_sale_price))) %>%
+    arrange(vsp)
+
+knitr::kable(ames_by_nbrhd[,c(1,3,5,6)], "simple", col.names = c("Neighborhood", "Number of Houses", "Mean Sale Price", "Variance (Highest to Lowest)"), align = "lccc")
+```
+
+Northridge Heights appears to be a top choice becuase it has 166 houses as well as a high mean sale price and variance. 
+
+From their hypothesis tests, The Friendly Flippers know that demand will be highest in the summer and lowest in the winter. So, they'll travel to Ames in the winter to buy the house and they'll plan to finish the project right before the summer begins. This way, they can buy the house at the lowest price and sell it for the highest price! Sounds like a plan.
+
+### __*Good luck, Friendly Flippers!*__
+
